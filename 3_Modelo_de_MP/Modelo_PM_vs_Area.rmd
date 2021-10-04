@@ -23,10 +23,30 @@ Luego se importan los datos para el modelo, depurados previamente en el notebook
 ```{r}
 path_data<-"../data/Datos_para_modelo/Datos_MP_BiomasaEst_Altura.xlsx"
 path_data2<-"../data/Datos_para_modelo/Datos_MP_BiomasaEst_Altura.csv"
+```
+AHora se procede a procesar la base de datos con el nuevo modelo y con el diametro y no perimetro
+
+```{r}
 model_data <- read_excel(path_data)
 model_data2<- read.csv(path_data2,sep = ';')
 ```
+AHora se procede a procesar la base de datos con el nuevo modelo y con el diametro y no perimetro
+```{r}
 
+estimatedtot<-c()
+for (j in 1:length(model_data2$Diametro)){
+  Bioomasaindpred<-exp(7.6109+0.0643*(model_data2$Diametro[j])/pi)
+  for (i in 1:14){
+    name<-paste(c("Diametro."),i, sep = "", collapse = NULL)
+    if(is.null(model_data2$name[j])){}
+    else{
+      Bioomasaindpred<-Bioomasaindpred+exp(7.6109+0.0643*(model_data2$name[j])/pi)# This gets the diameter of the perimeter measured
+      }}
+estimatedtot <- c(estimatedtot, Bioomasaindpred)
+}
+model_data2$NEwbiomass<-estimatedtot # This new biomass is in grams
+
+```
 Se empieza con la creacion de los modelos, se define un vector con datos a eliminar por tener efectos muy fuertes sobre 
 el modelo lineal. Los datos eliminados aplican para los 2 modelos. 
 
