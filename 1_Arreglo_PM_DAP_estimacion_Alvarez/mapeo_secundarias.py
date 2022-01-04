@@ -16,6 +16,7 @@ def diametrocrudo(data):
     
     print("--------------------------------------------")
     print("Datos con diametro",len(data), "datos")
+    print("la puta que te pario<<<<<<<<<<<<<<<-----")
     
     return data
 
