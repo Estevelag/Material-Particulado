@@ -1,0 +1,237 @@
+---
+title: "Modelos de MP por area"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+En este notebook se implementan los modelos de material particulado (MP) 2.5u y 10u por area. 
+
+
+# Librerias utilizadas
+
+```{r}
+library(lmtest)
+library(readxl)
+library(gvlma)
+library(ggplot2)
+library(orcutt)
+library(tidyr)
+library(broom)
+library(plyr)
+```
+
+# Datos para el modelo de Biomasa
+
+Importar csv
+
+```{r}
+dataDiametros <- read.csv("../data/Datos_para_modelo/Datos_MP_BiomasaEst_Altura.csv")
+dataDiametros <- dataDiametros[dataDiametros$Nombre.común != 'Grosello',]
+attach(dataDiametros)
+
+vaciosDiametro <-dataDiametros[is.na(dataDiametros$Diametro),] # Empty records
+#dataDiametros <- dataDiametros[!is.na(dataDiametros$Diametro),]
+```
+
+# Estimacion de Biomasa a partir del área
+
+La función suma la biomasa estimada sobre los diametros de cada registro. La función a utilizar es
+$$B=e^{7.6109+0.0643\cdot(diametro/pi)}$$
+
+```{r}
+Biomasa <- function(diametro) {
+  Biomasa <- exp(7.6109+0.0643*diametro/pi)
+  return(Biomasa)
+}
+
+Bestimated<-c()
+for (j in 1:length(Diametro)){
+  Diamindex  <- grep("Diametro", colnames(dataDiametros))   # Columnas cuyo nombre contiene "diametro"
+  diamj      <- dataDiametros[j,Diamindex]                  # Diametros de los individuos
+  Bindividuo <- lapply(diamj[!is.na(diamj)], Biomasa)
+  BTotal     <- ifelse(all(is.na(diamj)), 0, Reduce(`+`,Bindividuo))
+  Bestimated <- c(Bestimated, BTotal)
+}
+
+dataDiametros$Biomasa<-Bestimated # Biomasa en gramos
+```
+
+# Graficas: Boxplot MP 2.5 capturado por especie
+
+```{r}
+dataDiametros$MP2.5area <- dataDiametros$Material_2.5/dataDiametros$Area
+
+# Ordenar especies segun Mediana del MP 2.5
+aux <- aggregate(MP2.5area ~ Nombre.com.n, dataDiametros, median, na.action = na.omit)
+Namesmax2.5 <- head(aux[order(-aux$MP2.5area),],9)
+data2 <- dataDiametros[Nombre.com.n %in% Namesmax2.5$Nombre.com.n, ]
+
+box_plot_25p <-ggplot(data2 ,aes(x = data2$Nombre.com.n, y=data2$MP2.5area,fill=data2$Nombre.com.n))+ 
+    geom_boxplot() +
+    theme(panel.background = element_rect(fill = "transparent"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          plot.background = element_rect(fill = "transparent", color = NA),
+          legend.position = "none",
+          plot.title = element_text(family = "Helvetica", face = "bold", size = (17), hjust = 0.5),
+          axis.title.x = element_text(size = 15, family = "Helvetica", face = "bold",colour="black"),
+          axis.title.y = element_text(size = 15, family = "Helvetica", face = "bold",colour="black"),
+          axis.text.x = element_text(size = 11, hjust = 1, family = "Helvetica", face="bold",colour="black"))+
+    xlab("Nombre común del árbol") +
+    ggtitle('9 especies de árbol en EAFIT que más MP 2.5 capturan') +
+    ylab("MP2.5 por área") 
+box_plot_25p
+```
+
+
+
+```{r}
+# Ordenar especies segun Mediana del MP 10
+dataDiametros$MP10area <- dataDiametros$Material_10/dataDiametros$Area
+aux <- aggregate(MP10area ~ Nombre.com.n, dataDiametros, median, na.action=na.omit)
+Namesmax10 <- head(aux[order(-aux$MP10area),],9)
+data2 <- dataDiametros[Nombre.com.n %in% Namesmax10$Nombre.com.n, ]
+
+box_plot_10p <-ggplot(data2 ,aes(x = data2$Nombre.com.n, y=data2$MP10area,fill=data2$Nombre.com.n))+ 
+    geom_boxplot() +
+    theme(panel.background = element_rect(fill = "transparent"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          plot.background = element_rect(fill = "transparent", color = NA),
+          legend.position = "none",
+          plot.title = element_text(family = "Helvetica", face = "bold", size = (17), hjust = 0.5),
+          axis.title.x = element_text(size = 15, family = "Helvetica", face = "bold",colour="black"),
+          axis.title.y = element_text(size = 15, family = "Helvetica", face = "bold",colour="black"),
+          axis.text.x = element_text(size = 11, hjust = 1, family = "Helvetica", face="bold",colour="black"))+
+    xlab("Nombre común del árbol") +
+    ggtitle('9 especies de árbol en EAFIT que más MP 10 capturan') +
+    ylab("MP10 por área") 
+box_plot_10p
+```
+
+
+# Datos para el modelo de Area
+
+Importar csv
+
+```{r}
+dataAreas <- read.csv("../data/Datos_para_modelo/BasedatosAREABIOMASA4.csv", sep=';')
+dataAreas$Area <- as.numeric(dataAreas$Area)
+dataAreas$Biomasa_g <- as.numeric(dataAreas$Biomasa_g)
+attach(dataAreas)
+
+vaciosArea <-dataAreas[is.na(dataAreas$Area),] # Empty records
+#dataAreas <- dataAreas[!is.na(dataAreas$Area),]
+```
+
+# Estimacion del Area a partir de la Biomasa
+
+La función estima el area foliar por especie a partir del valor de Biomasa [gramos]
+$$Area=a+b\cdot Biomasa$$
+
+```{r}
+
+# Regresion Area por especie
+modelArea <- by(dataAreas,dataAreas$Especie, function (df) lm(df$Area ~ df$Biomasa_g, data = df))
+Rcuadrado <- lapply(rownames(modelArea), function (especie) summary(modelArea[[especie]])$r.squared)
+
+pAreas <-ggplot(data=data.frame(especie=rownames(modelArea), r=unlist(Rcuadrado)), 
+           aes(x=reorder(especie,-r), y=r)) + geom_bar(stat="identity")
+
+
+# Recorte de Outliers
+significancia = .95
+recorte <- function (df) {
+  distances = mahalanobis(df[,5:6],colMeans(df[,5:6]),cov(df[,5:6]))
+  cutoff =quantile(distances, significancia)
+  outliers = df[distances < cutoff,]
+  return(outliers)
+}
+dataAreasclean <- by(dataAreas, dataAreas$Especie, function(df) recorte(df))
+modelArea <- lapply(rownames(dataAreasclean), function (especie) 
+                        lm(dataAreasclean[[especie]]$Area ~ dataAreasclean[[especie]]$Biomasa_g, 
+                        data = dataAreasclean[[especie]]))
+Rcuadrado   <- lapply(modelArea, function (df) summary(df)$r.squared)
+pAreasclean <-ggplot(data=data.frame(especie=rownames(dataAreasclean), r=unlist(Rcuadrado)), 
+                  aes(x=reorder(especie,-r), y=r)) + geom_bar(stat="identity")+theme(axis.text.x = element_text(size = 5, hjust = 1, family = "Helvetica",colour="black"))
+pAreasclean
+
+summary(Area)
+
+
+```
+
+Se empieza con la creacion de los modelos, se define un vector con datos a eliminar por tener efectos muy fuertes sobre 
+el modelo lineal. Los datos eliminados aplican para los 2 modelos.
+
+
+```{r}
+to_eliminate <- c(62)
+
+MP2.5 <- lm(log(Material_2.5) ~ log(Area) + Tipo_Hoja, data=dataDiametros)#[-to_eliminate,]
+anova(MP2.5)
+bptest(MP2.5)
+gvlma(MP2.5)
+shapiro.test(MP2.5$residuals)
+summary(MP2.5)
+
+# if bptest not enough
+reg <-cochrane.orcutt(MP2.5)
+summary(reg)
+bptest(reg)
+bptest(reg)
+shapiro.test(reg$residuals)
+
+```
+
+
+```{r}
+modelo_10 <- lm(log(Material_10) ~ log(Area) + Tipo_Hoja,data=dataDiametros[-c(62),])#[-c(32,61,62,168,242),])
+
+summary(modelo_10)
+nonparmod10 <- aov(log(Material_10) ~ log(Area) + factor(Tipo_Hoja),data=dataDiametros[-c(62),])
+summary(nonparmod10)
+anova(modelo_10)
+gvlma(modelo_10)
+shapiro.test(nonparmod10$residuals)
+plot(modelo_10)
+#gvlma(modelo_10)
+shapiro.test(modelo_10$residuals)
+bptest(modelo_10)
+dataDiametros <- dataDiametros[!is.na(dataDiametros$Area),]
+#Tests no requieren de supuestos
+kruskal.test(log(Material_10) ~  Tipo_Hoja, data=dataDiametros[-c(62),])
+wilcox.test( log(Area), log(Material_10), alternative = "two.sided")
+## tests without log that don't require assumptions
+kruskal.test(Material_10 ~  Tipo_Hoja, data=dataDiametros[-c(62),])
+wilcox.test( Area, Material_10, alternative = "two.sided")
+
+
+#########IF the coeficients are not right and ther is another way this is a try
+# this packages are used to find the best distribution that fits the data(the y distribution? or residuals)
+library(gamlss)
+library(gamlss.dist)
+library(gamlss.add)
+
+
+modelo_10$residuals <- modelo_10$residuals[!is.na(modelo_10$residuals)]
+fit <- fitDist(modelo_10$residuals)
+summary(fit)
+dataDiametros <- dataDiametros[!is.na(dataDiametros$Material_10),]
+fit <- fitDist(dataDiametros$Material_10,try.gamlss = TRUE)
+summary(fit)
+#"skew exponential power type 4    mu.link = "identity", sigma.link = "log", nu.link = "log", tau.link = "log"
+
+dataDiametros <- dataDiametros[!is.na(dataDiametros$Area),]
+plot(log(dataDiametros$Area),log(dataDiametros$Material_10))
+
+
+regglm <- glm(log(Material_10) ~ log(Area) + factor(Tipo_Hoja), data=dataDiametros, family=gaussian)
+summary(regglm)
+
+#compare the coeficcients, they are a little bit different
+regglm$coefficients
+modelo_10$coefficients
+
+```
+
