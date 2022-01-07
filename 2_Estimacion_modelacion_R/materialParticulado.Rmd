@@ -320,7 +320,26 @@ cat('     verificación: ',c(d$MP10_tot[1],(log(d$Area[1])*pendiente+intercepto+
 
 ```{r}
 ##Graphs about the individuals that capture the most PM
+#dataDiametros$MP10area <- dataDiametros$Material_10/dataDiametros$Area
+aux <- aggregate(MP2.5_tot ~ Nombre.común, d, median, na.action=na.omit)
+Namesmax10 <- head(aux[order(-aux$MP2.5_tot),],9)
+data2 <- d[Nombre.común %in% Namesmax10$Nombre.común, ]
 
+box_plot_25p <-ggplot(data2 ,aes(x = data2$Nombre.común, y=data2$MP2.5_tot,fill=data2$Nombre.común))+ 
+    geom_boxplot() +
+    theme(panel.background = element_rect(fill = "transparent"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          plot.background = element_rect(fill = "transparent", color = NA),
+          legend.position = "none",
+          plot.title = element_text(family = "Helvetica", face = "bold", size = (17), hjust = 0.5),
+          axis.title.x = element_text(size = 15, family = "Helvetica", face = "bold",colour="black"),
+          axis.title.y = element_text(size = 15, family = "Helvetica", face = "bold",colour="black"),
+          axis.text.x = element_text(size = 7, hjust = 1, family = "Helvetica", face="bold",colour="black"))+
+    xlab("Nombre común del árbol") +
+    ggtitle('9 especies de árbol en EAFIT que más MP 2.5 capturan') +
+    ylab("MP2.5 total estimado medio por sp") 
+C
 
 ```
 
