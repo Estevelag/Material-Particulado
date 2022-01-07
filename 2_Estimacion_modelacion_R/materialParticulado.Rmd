@@ -18,6 +18,7 @@ library(orcutt)
 library(tidyr)
 library(broom)
 library(plyr)
+library(dplyr)
 ```
 
 # Datos para el modelo de Biomasa
@@ -281,20 +282,50 @@ modelo_10$coefficients
 
 ```
 ```{r}
+# making a dataframe of predicted areas to make a prediction of the entire particulate material
+d<-data.frame(predicted_area[[1]])
+for (j in 1:length(predicted_area)){
+  if (predicted_area[[j]]!='not_area'){
+    d<-rbind(d,predicted_area[[j]])
+  }
+}
+d  
+
+```
+
+```{r}
 ###Unite the models of Are and particulate material
-# getting all the unique pairs of Nombre común and Tipo_Hoja
-ans = unique(dataDiametros[,c('Nombre.común','Tipo_Hoja')])
+
+#SQL practice
+#ans = unique(dataDiametros[,c('Nombre.común','Tipo_Hoja')])
 # sample dataframe tha is the input
-samples<- data.frame('Nombre.común'=c('Abarco','Aguacatillo'),'Area'=c(123,324))
+#samples<- data.frame('Nombre.común'=c('Abarco','Aguacatillo'),'Area'=c(123,324))
+#mergedAreas<-merge(x = samples, y =ans , by="Nombre.común")
 
-mergedAreas<-merge(x = samples, y =ans , by="Nombre.común")
-mergedAreas$MP10_tot<-predict(modelo_10, newdata = mergedAreas)
-mergedAreas$MP2.5tot<-predict(regglm , newdata = mergedAreas)
-mergedAreas
 
+d$MP10_tot<-predict(modelo_10, newdata = d)
+d$MP10_tot<-exp(d$MP10_tot)
+d$MP2.5_tot<-predict(MP2.5 , newdata = d)
+d$MP2.5_tot<-exp(d$MP2.5_tot)
+d
+
+cat('El total de material capturado por 220 árboles de PM2.5 y PM10 es: ',sum(d$MP2.5_tot,na.rm=TRUE),' g y ',sum(d$MP10_tot,na.rm=TRUE),' g')
 #verification
 intercepto <- summary(modelo_10)$coefficients[1,1]
 pendiente <- summary(modelo_10)$coefficients[2,1]
 HojaSimplefac <- summary(modelo_10)$coefficients[9,1]
-print(c(mergedAreas$MP10_tot[1],(log(mergedAreas$Area[1])*pendiente+intercepto+HojaSimplefac)))
+cat('     verificación: ',c(d$MP10_tot[1],(log(d$Area[1])*pendiente+intercepto+HojaSimplefac)))
+
+```
+
+```{r}
+##Graphs about the individuals that capture the most PM
+
+
+```
+
+
+```{r}
+#Error analysis of the total estimation
+
 ```
