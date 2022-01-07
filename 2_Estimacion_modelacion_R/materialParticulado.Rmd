@@ -31,6 +31,7 @@ attach(dataDiametros)
 
 vaciosDiametro <-dataDiametros[is.na(dataDiametros$Diametro),] # Empty records
 #dataDiametros <- dataDiametros[!is.na(dataDiametros$Diametro),]
+colnames(dataDiametros)[7] <- "Biomasa_g"
 ```
 
 # Estimacion de Biomasa a partir del área
@@ -132,7 +133,7 @@ $$Area=a+b\cdot Biomasa$$
 ```{r}
 
 # Regresion Area por especie
-modelArea <- by(dataAreas,dataAreas$Especie, function (df) lm(df$Area ~ df$Biomasa_g, data = df))
+modelArea <- by(dataAreas,dataAreas$Especie, function (df) lm(Area ~ Biomasa_g, data = df))
 Rcuadrado <- lapply(rownames(modelArea), function (especie) summary(modelArea[[especie]])$r.squared)
 
 pAreas <-ggplot(data=data.frame(especie=rownames(modelArea), r=unlist(Rcuadrado)), 
@@ -149,7 +150,7 @@ recorte <- function (df) {
 }
 dataAreasclean <- by(dataAreas, dataAreas$Especie, function(df) recorte(df))
 modelArea <- lapply(rownames(dataAreasclean), function (especie) 
-                        lm(dataAreasclean[[especie]]$Area ~ dataAreasclean[[especie]]$Biomasa_g, 
+                        lm(Area ~ Biomasa_g, 
                         data = dataAreasclean[[especie]]))
 Rcuadrado   <- lapply(modelArea, function (df) summary(df)$r.squared)
 pAreasclean <-ggplot(data=data.frame(especie=rownames(dataAreasclean), r=unlist(Rcuadrado)), 
@@ -175,15 +176,35 @@ newdata$pred_area <- predict.lm(modelArea[[1]],newdata)
 test <- setNames(modelArea,rownames(dataAreasclean))
 
 predict_vals <- function(df){
-  species <- unique(dataDiametros$Nombre.común)
-  df$pred_area <- predict.lm(modelArea[[species]],df)
-  return(df)
+  #print(df)
+  species <- unique(df$Nombre.común)
+  print(species)
+  
+  
+  if (!is.null(test[[species]])){
+    df$pred_area <- predict.lm(test[[species]],df)
+    return(df)
+  }else{
+    print("not_area")
+  }
+  #df$pred_area <- predict.lm(test[[species]],df)
+  #return(df)
 }
 
 predicted_area <- by(dataDiametros, dataDiametros$Nombre.común, function(df) predict_vals(df))
 
 ## Toca que "modelArea" este definido globalmente y que tenga indexado los nombres la especie correspondiente
 
+```
+
+
+
+```{r}
+if (!is.null(test[["Aguacate"]])){
+  print("jaja")
+}else{
+  print("else")
+}
 ```
 
 Se empieza con la creacion de los modelos, se define un vector con datos a eliminar por tener efectos muy fuertes sobre 
