@@ -18,7 +18,6 @@ library(orcutt)
 library(tidyr)
 library(broom)
 library(plyr)
-library(dplyr)
 ```
 
 # Datos para el modelo de Biomasa
@@ -58,7 +57,9 @@ for (j in 1:length(Diametro)){
 dataDiametros$Biomasa<-Bestimated # Biomasa en gramos
 #```
 
-# Graficas: Boxplot MP 2.5 capturado por especie
+Graficas: 
+
+Boxplot captura de MP 2.5 por area por especie
 
 ```{r}
 dataDiametros$MP2.5area <- dataDiametros$Material_2.5/dataDiametros$Area
@@ -66,9 +67,9 @@ dataDiametros$MP2.5area <- dataDiametros$Material_2.5/dataDiametros$Area
 # Ordenar especies segun Mediana del MP 2.5
 aux <- aggregate(MP2.5area ~ Nombre.común, dataDiametros, median, na.action = na.omit)
 Namesmax2.5 <- head(aux[order(-aux$MP2.5area),],9)
-data2 <- dataDiametros[Nombre.común %in% Namesmax2.5$Nombre.común, ]
+data25plot <- dataDiametros[Nombre.común %in% Namesmax2.5$Nombre.común, ]
 
-box_plot_25p <-ggplot(data2 ,aes(x = data2$Nombre.común, y=data2$MP2.5area,fill=data2$Nombre.común))+ 
+box_plot_25p <-ggplot(data25plot ,aes(x = reorder(Nombre.común,MP2.5area,na.rm = TRUE), y=MP2.5area,fill=Nombre.común))+ 
     geom_boxplot() +
     theme(panel.background = element_rect(fill = "transparent"),
           panel.grid.major = element_blank(),
@@ -78,23 +79,23 @@ box_plot_25p <-ggplot(data2 ,aes(x = data2$Nombre.común, y=data2$MP2.5area,fill
           plot.title = element_text(family = "Helvetica", face = "bold", size = (17), hjust = 0.5),
           axis.title.x = element_text(size = 15, family = "Helvetica", face = "bold",colour="black"),
           axis.title.y = element_text(size = 15, family = "Helvetica", face = "bold",colour="black"),
-          axis.text.x = element_text(size = 11, hjust = 1, family = "Helvetica", face="bold",colour="black"))+
+          axis.text.x = element_text(size = 11, angle = 45, vjust = 0.5, family = "Helvetica", face="bold",colour="black"))+
     xlab("Nombre común del árbol") +
     ggtitle('9 especies de árbol en EAFIT que más MP 2.5 capturan') +
     ylab("MP2.5 por área") 
 box_plot_25p
 ```
 
-
+Boxplot captura de MP 10 por area por especie
 
 ```{r}
 # Ordenar especies segun Mediana del MP 10
 dataDiametros$MP10area <- dataDiametros$Material_10/dataDiametros$Area
 aux <- aggregate(MP10area ~ Nombre.común, dataDiametros, median, na.action=na.omit)
 Namesmax10 <- head(aux[order(-aux$MP10area),],9)
-data2 <- dataDiametros[Nombre.común %in% Namesmax10$Nombre.común, ]
+data10plot <- dataDiametros[Nombre.común %in% Namesmax10$Nombre.común, ]
 
-box_plot_10p <-ggplot(data2 ,aes(x = data2$Nombre.común, y=data2$MP10area,fill=data2$Nombre.común))+ 
+box_plot_10p <-ggplot(data10plot ,aes(x = reorder(Nombre.común, MP10area, na.rm=TRUE), y=MP10area,fill=Nombre.común))+ 
     geom_boxplot() +
     theme(panel.background = element_rect(fill = "transparent"),
           panel.grid.major = element_blank(),
@@ -104,7 +105,7 @@ box_plot_10p <-ggplot(data2 ,aes(x = data2$Nombre.común, y=data2$MP10area,fill=
           plot.title = element_text(family = "Helvetica", face = "bold", size = (17), hjust = 0.5),
           axis.title.x = element_text(size = 15, family = "Helvetica", face = "bold",colour="black"),
           axis.title.y = element_text(size = 15, family = "Helvetica", face = "bold",colour="black"),
-          axis.text.x = element_text(size = 11, hjust = 1, family = "Helvetica", face="bold",colour="black"))+
+          axis.text.x = element_text(size = 11, angle = 45, vjust = 0.5, family = "Helvetica", face="bold",colour="black"))+
     xlab("Nombre común del árbol") +
     ggtitle('9 especies de árbol en EAFIT que más MP 10 capturan') +
     ylab("MP10 por área") 
@@ -162,28 +163,17 @@ summary(Area)
 
 
 ```
-prediccion de area foliar
+Prediccion de area foliar por individuo desde la estimacion de biomasa foliar. Es de notar que hay 4 arboles para los que no se tiene un modelo de area foliar por biomasa por lo que esas especies no tienen prediccion, almenos de momento
 
 ```{r}
-newdata <- data.frame(one_stuff = c("jaja","jeje"), Biomasa_g = c(0.2,0.0001), other_stuff = c(345,355))
-
-#test_model <- lm(Area ~ Biomasa_g,data = dataAreasclean[["Abarco"]])
-#test_model
-#predictions <- predict.lm(test_model,newdata)
-
-
-#predictions <- predict.lm(modelArea[[1]],newdata)
-newdata$pred_area <- predict.lm(modelArea[[1]],newdata)
-test <- setNames(modelArea,rownames(dataAreasclean))
+modelArea <- setNames(modelArea,rownames(dataAreasclean))
 
 predict_vals <- function(df){
-  #print(df)
   species <- unique(df$Nombre.común)
-  print(species)
-  
-  
+  #print(species)
+
   if (!is.null(test[[species]])){
-    df$pred_area <- predict.lm(test[[species]],df)
+    df$pred_area <- predict.lm(modelArea[[species]],df)
     return(df)
   }else{
     print("not_area")
@@ -196,16 +186,6 @@ predicted_area <- by(dataDiametros, dataDiametros$Nombre.común, function(df) pr
 
 ## Toca que "modelArea" este definido globalmente y que tenga indexado los nombres la especie correspondiente
 
-```
-
-
-
-```{r}
-if (!is.null(test[["Aguacate"]])){
-  print("jaja")
-}else{
-  print("else")
-}
 ```
 
 Se empieza con la creacion de los modelos, se define un vector con datos a eliminar por tener efectos muy fuertes sobre 
@@ -318,14 +298,17 @@ cat('     verificación: ',c(d$MP10_tot[1],(log(d$Area[1])*pendiente+intercepto+
 
 ```
 
+Prediccion final de material capturado por individuo:
+
+Prediccion de MP 2.5
+
 ```{r}
 ##Graphs about the individuals that capture the most PM
-#dataDiametros$MP10area <- dataDiametros$Material_10/dataDiametros$Area
 aux <- aggregate(MP2.5_tot ~ Nombre.común, d, median, na.action=na.omit)
 Namesmax10 <- head(aux[order(-aux$MP2.5_tot),],9)
-data2 <- d[Nombre.común %in% Namesmax10$Nombre.común, ]
+data25pred_plot <- d[Nombre.común %in% Namesmax10$Nombre.común, ]
 
-box_plot_25p <-ggplot(data2 ,aes(x = data2$Nombre.común, y=data2$MP2.5_tot,fill=data2$Nombre.común))+ 
+box_plot_25pred <-ggplot(data25pred_plot ,aes(x = reorder(Nombre.común,MP2.5_tot,na.rm=TRUE), y=MP2.5_tot,fill=Nombre.común))+ 
     geom_boxplot() +
     theme(panel.background = element_rect(fill = "transparent"),
           panel.grid.major = element_blank(),
@@ -335,13 +318,40 @@ box_plot_25p <-ggplot(data2 ,aes(x = data2$Nombre.común, y=data2$MP2.5_tot,fill
           plot.title = element_text(family = "Helvetica", face = "bold", size = (17), hjust = 0.5),
           axis.title.x = element_text(size = 15, family = "Helvetica", face = "bold",colour="black"),
           axis.title.y = element_text(size = 15, family = "Helvetica", face = "bold",colour="black"),
-          axis.text.x = element_text(size = 7, hjust = 1, family = "Helvetica", face="bold",colour="black"))+
+          axis.text.x = element_text(size = 11, angle = 45, vjust = 0.5, family = "Helvetica", face="bold",colour="black"))+
     xlab("Nombre común del árbol") +
     ggtitle('9 especies de árbol en EAFIT que más MP 2.5 capturan') +
     ylab("MP2.5 total estimado medio por sp") 
-C
+box_plot_25pred
 
 ```
+
+Prediccion de MP 10
+
+```{r}
+##Graphs about the individuals that capture the most PM
+aux <- aggregate(MP10_tot ~ Nombre.común, d, median, na.action=na.omit)
+Namesmax10 <- head(aux[order(-aux$MP10_tot),],9)
+data10pred_plot <- d[Nombre.común %in% Namesmax10$Nombre.común, ]
+
+box_plot_10pred <-ggplot(data10pred_plot ,aes(x = reorder(Nombre.común,MP10_tot,na.rm=TRUE), y=MP10_tot,fill=Nombre.común))+ 
+    geom_boxplot() +
+    theme(panel.background = element_rect(fill = "transparent"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          plot.background = element_rect(fill = "transparent", color = NA),
+          legend.position = "none",
+          plot.title = element_text(family = "Helvetica", face = "bold", size = (17), hjust = 0.5),
+          axis.title.x = element_text(size = 15, family = "Helvetica", face = "bold",colour="black"),
+          axis.title.y = element_text(size = 15, family = "Helvetica", face = "bold",colour="black"),
+          axis.text.x = element_text(size = 11, angle = 45, vjust = 0.5, family = "Helvetica", face="bold",colour="black"))+
+    xlab("Nombre común del árbol") +
+    ggtitle('9 especies de árbol en EAFIT que más MP 10 capturan') +
+    ylab("MP10 total estimado medio por sp") 
+box_plot_10pred
+
+```
+
 
 
 ```{r}
