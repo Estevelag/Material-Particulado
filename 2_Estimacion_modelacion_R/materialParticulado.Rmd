@@ -172,7 +172,7 @@ predict_vals <- function(df){
   species <- unique(df$Nombre.común)
   #print(species)
 
-  if (!is.null(test[[species]])){
+  if (!is.null(modelArea[[species]])){
     df$pred_area <- predict.lm(modelArea[[species]],df)
     return(df)
   }else{
@@ -269,7 +269,8 @@ for (j in 1:length(predicted_area)){
     d<-rbind(d,predicted_area[[j]])
   }
 }
-d  
+#Se borra la primera fila que estaria duplicada
+d <- d[-c(1),] 
 
 ```
 
