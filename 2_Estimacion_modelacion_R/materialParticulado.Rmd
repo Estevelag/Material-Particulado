@@ -155,12 +155,12 @@ modelArea <- lapply(rownames(dataAreasclean), function (especie)
                         lm(Area ~ Biomasa_g, 
                         data = dataAreasclean[[especie]]))
 Rcuadrado   <- lapply(modelArea, function (df) summary(df)$r.squared)
+coefficientsArea<- lapply(modelArea, function (df) summary(df)$coefficients)
 pAreasclean <-ggplot(data=data.frame(especie=rownames(dataAreasclean), r=unlist(Rcuadrado)), 
                   aes(x=reorder(especie,-r), y=r)) + geom_bar(stat="identity")+theme(axis.text.x = element_text(size = 5, hjust = 1, family = "Helvetica",colour="black"))
 pAreasclean
 
 summary(Area)
-
 
 
 ```
