@@ -2,7 +2,11 @@
 title: "Modelos de MP por area"
 output:
   pdf_document: default
-  html_notebook: default
+  html_document:
+    toc: true # table of content true
+    toc_depth: 3  # upto three depths of headings (specified by #, ## and ###)
+    number_sections: true  ## if you want number sections at each table header
+    theme: united 
 ---
 En este notebook se implementan los modelos de material particulado (MP) 2.5u y 10u por area. 
 
@@ -38,24 +42,6 @@ colnames(dataDiametros)[7] <- "Biomasa_g"
 
 La función suma la biomasa estimada sobre los diametros de cada registro. La función a utilizar es
 $$B=e^{7.6109+0.0643\cdot(diametro/pi)}$$
-#####This chunk is already done in python so nno need to run
-#```{r}
-Biomasa <- function(diametro) {
-  Biomasa <- exp(7.6109+0.0643*diametro/pi)
-  return(Biomasa)
-}
-
-Bestimated<-c()
-for (j in 1:length(Diametro)){
-  Diamindex  <- grep("Diametro", colnames(dataDiametros))   # Columnas cuyo nombre contiene "diametro"
-  diamj      <- dataDiametros[j,Diamindex]                  # Diametros de los individuos
-  Bindividuo <- lapply(diamj[!is.na(diamj)], Biomasa)
-  BTotal     <- ifelse(all(is.na(diamj)), 0, Reduce(`+`,Bindividuo))
-  Bestimated <- c(Bestimated, BTotal)
-}
-
-dataDiametros$Biomasa<-Bestimated # Biomasa en gramos
-#```
 
 Graficas: 
 
@@ -140,7 +126,7 @@ Rcuadrado <- lapply(rownames(modelArea), function (especie) summary(modelArea[[e
 
 pAreas <-ggplot(data=data.frame(especie=rownames(modelArea), r=unlist(Rcuadrado)), 
            aes(x=reorder(especie,-r), y=r)) + geom_bar(stat="identity")
-
+pAreas
 
 # Recorte de Outliers
 significancia = .95
@@ -179,8 +165,6 @@ predict_vals <- function(df){
   }else{
     print("not_area")
   }
-  #df$pred_area <- predict.lm(test[[species]],df)
-  #return(df)
 }
 
 predicted_area <- by(dataDiametros, dataDiametros$Nombre.común, function(df) predict_vals(df))
