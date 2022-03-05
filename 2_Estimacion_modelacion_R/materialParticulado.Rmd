@@ -196,6 +196,59 @@ shapiro.test(reg$residuals)
 
 ```
 
+```{r}
+boxplot( Material_2.5 ~ Tipo_Hoja, data=dataDiametros )
+
+```
+
+	
+
+```{r}
+plot(Material_2.5 ~ Area, data=dataDiametros)
+mod2.5A<-lm(log(Material_2.5) ~ log(Area), data=dataDiametros)
+summary(mod2.5A)
+
+```
+
+```{r}
+library(dplyr)
+
+z<-dataDiametros%>%count(Nombre.común)
+list<-filter(z,n >= 4)
+val<-list$Nombre.común
+minimos<- dataDiametros %>%filter(Nombre.común %in% val)
+
+```
+
+
+
+```{r}
+m25_boxcos_est <- boxcox(Material_2.5 ~ Area + Nombre.común,data = minimos)
+lambda_m25 <- m25_boxcos_est$x[which.max(m25_boxcos_est$y)]
+boxcos_model_m25 <- lm(((Material_2.5^lambda_m25-1)/lambda_m25) ~ Area + Nombre.común,data = minimos)
+summary(boxcos_model_m25)
+plot(boxcos_model_m25)
+
+```
+
+```{r}
+m10_boxcos_est <- boxcox(Material_10 ~ Area + Nombre.común,data = minimos)
+lambda_m10 <- m10_boxcos_est$x[which.max(m10_boxcos_est$y)]
+boxcos_model_m10 <- lm(log(Material_10) ~ Area + Nombre.común,data = minimos)
+summary(boxcos_model_m10)
+plot(boxcos_model_m10)
+
+```
+	
+
+```{r}
+plot(log(Material_10) ~ log(Area), data=dataDiametros)
+mod10A<-lm(log(Material_10) ~ log(Area), data=dataDiametros)
+plot(mod10A)
+
+``` 
+
+
 
 ```{r}
 modelo_10 <- lm(log(Material_10) ~ log(Area) + Tipo_Hoja,data=dataDiametros[-c(62),])#[-c(32,61,62,168,242),])
