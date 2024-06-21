@@ -1,0 +1,550 @@
+---
+title: "Modelos de MP por area"
+output:
+  pdf_document: default
+  html_document:
+    toc: true # table of content true
+    toc_depth: 3  # upto three depths of headings (specified by #, ## and ###)
+    number_sections: true  ## if you want number sections at each table header
+    theme: united 
+---
+En este notebook se implementan los modelos de material particulado (MP) 2.5u y 10u por area. 
+
+
+# Librerias utilizadas
+
+```{r}
+library(lmtest)
+library(readxl)
+library(gvlma)
+library(ggplot2)
+library(orcutt)
+library(tidyr)
+library(broom)
+library(plyr)
+```
+
+# Datos para el modelo de Biomasa
+
+Importar csv
+
+```{r}
+dataDiametros <- read.csv("../data/Datos_para_modelo/Datos_MP_BiomasaEst_Altura.csv")
+dataDiametros <- dataDiametros[dataDiametros$Nombre.común != 'Grosello',]
+attach(dataDiametros)
+
+vaciosDiametro <-dataDiametros[is.na(dataDiametros$Diametro),] # Empty records
+#dataDiametros <- dataDiametros[!is.na(dataDiametros$Diametro),]
+colnames(dataDiametros)[7] <- "Biomasa_g"
+```
+
+# Estimacion de Biomasa a partir del área
+
+La función suma la biomasa estimada sobre los diametros de cada registro. La función a utilizar es
+$$B=e^{7.6109+0.0643\cdot(diametro/pi)}$$
+
+Graficas: 
+
+Boxplot captura de MP 2.5 por area por especie
+
+```{r}
+dataDiametros$MP2.5area <- dataDiametros$Material_2.5/dataDiametros$Area
+
+# Ordenar especies segun Mediana del MP 2.5
+aux <- aggregate(MP2.5area ~ Nombre.común, dataDiametros, median, na.action = na.omit)
+Namesmax2.5 <- head(aux[order(-aux$MP2.5area),],9)
+data25plot <- dataDiametros[Nombre.común %in% Namesmax2.5$Nombre.común, ]
+
+box_plot_25p <-ggplot(data25plot ,aes(x = reorder(Nombre.común,MP2.5area,na.rm = TRUE), y=MP2.5area,fill=Nombre.común))+ 
+    geom_boxplot() +
+    theme(panel.background = element_rect(fill = "transparent"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          plot.background = element_rect(fill = "transparent", color = NA),
+          legend.position = "none",
+          plot.title = element_text(family = "Helvetica", face = "bold", size = (17), hjust = 0.5),
+          axis.title.x = element_text(size = 15, family = "Helvetica", face = "bold",colour="black"),
+          axis.title.y = element_text(size = 15, family = "Helvetica", face = "bold",colour="black"),
+          axis.text.x = element_text(size = 11, angle = 45, vjust = 0.5, family = "Helvetica", face="bold",colour="black"))+
+    xlab("Nombre común del árbol") +
+    ggtitle('9 especies de árbol en EAFIT que más MP 2.5 capturan') +
+    ylab("MP2.5 por área") 
+box_plot_25p
+```
+
+Boxplot captura de MP 10 por area por especie
+
+```{r}
+# Ordenar especies segun Mediana del MP 10
+dataDiametros$MP10area <- dataDiametros$Material_10/dataDiametros$Area
+aux <- aggregate(MP10area ~ Nombre.común, dataDiametros, median, na.action=na.omit)
+Namesmax10 <- head(aux[order(-aux$MP10area),],9)
+data10plot <- dataDiametros[Nombre.común %in% Namesmax10$Nombre.común, ]
+
+box_plot_10p <-ggplot(data10plot ,aes(x = reorder(Nombre.común, MP10area, na.rm=TRUE), y=MP10area,fill=Nombre.común))+ 
+    geom_boxplot() +
+    theme(panel.background = element_rect(fill = "transparent"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          plot.background = element_rect(fill = "transparent", color = NA),
+          legend.position = "none",
+          plot.title = element_text(family = "Helvetica", face = "bold", size = (17), hjust = 0.5),
+          axis.title.x = element_text(size = 15, family = "Helvetica", face = "bold",colour="black"),
+          axis.title.y = element_text(size = 15, family = "Helvetica", face = "bold",colour="black"),
+          axis.text.x = element_text(size = 11, angle = 45, vjust = 0.5, family = "Helvetica", face="bold",colour="black"))+
+    xlab("Nombre común del árbol") +
+    ggtitle('9 especies de árbol en EAFIT que más MP 10 capturan') +
+    ylab("MP10 por área") 
+box_plot_10p
+```
+
+
+# Datos para el modelo de Area
+
+Importar csv
+
+```{r}
+dataAreas <- read.csv("../data/Datos_para_modelo/BasedatosAREABIOMASA4.csv", sep=';')
+dataAreas$Area <- as.numeric(dataAreas$Area)
+dataAreas$Biomasa_g <- as.numeric(dataAreas$Biomasa_g)
+attach(dataAreas)
+
+vaciosArea <-dataAreas[is.na(dataAreas$Area),] # Empty records
+#dataAreas <- dataAreas[!is.na(dataAreas$Area),]
+```
+
+# Estimacion del Area a partir de la Biomasa
+
+La función estima el area foliar por especie a partir del valor de Biomasa [gramos]
+$$Area=a+b\cdot Biomasa$$
+
+```{r}
+
+# Regresion Area por especie
+modelArea <- by(dataAreas,dataAreas$Especie, function (df) lm(Area ~ Biomasa_g, data = df))
+Rcuadrado <- lapply(rownames(modelArea), function (especie) summary(modelArea[[especie]])$r.squared)
+
+pAreas <-ggplot(data=data.frame(especie=rownames(modelArea), r=unlist(Rcuadrado)), 
+           aes(x=reorder(especie,-r), y=r)) + geom_bar(stat="identity")
+pAreas
+
+# Recorte de Outliers
+significancia = .95
+recorte <- function (df) {
+  distances = mahalanobis(df[,5:6],colMeans(df[,5:6]),cov(df[,5:6]))
+  cutoff =quantile(distances, significancia)
+  outliers = df[distances < cutoff,]
+  return(outliers)
+}
+dataAreasclean <- by(dataAreas, dataAreas$Especie, function(df) recorte(df))
+modelArea <- lapply(rownames(dataAreasclean), function (especie) 
+                        lm(Area ~ Biomasa_g, 
+                        data = dataAreasclean[[especie]]))
+Rcuadrado   <- lapply(modelArea, function (df) summary(df)$r.squared)
+coefficientsArea<- lapply(modelArea, function (df) summary(df)$coefficients)
+pAreasclean <-ggplot(data=data.frame(especie=rownames(dataAreasclean), r=unlist(Rcuadrado)), 
+                  aes(x=reorder(especie,-r), y=r)) + geom_bar(stat="identity")+theme(axis.text.x = element_text(size = 5, hjust = 1, family = "Helvetica",colour="black"))
+pAreasclean
+
+summary(Area)
+
+
+```
+Prediccion de area foliar por individuo desde la estimacion de biomasa foliar. Es de notar que hay 4 arboles para los que no se tiene un modelo de area foliar por biomasa por lo que esas especies no tienen prediccion, almenos de momento
+
+```{r}
+modelArea <- setNames(modelArea,rownames(dataAreasclean))
+
+predict_vals <- function(df){
+  species <- unique(df$Nombre.común)
+  #print(species)
+
+  if (!is.null(modelArea[[species]])){
+    df$pred_area <- predict.lm(modelArea[[species]],df)
+    return(df)
+  }else{
+    print("not_area")
+  }
+}
+
+predicted_area <- by(dataDiametros, dataDiametros$Nombre.común, function(df) predict_vals(df))
+
+## Toca que "modelArea" este definido globalmente y que tenga indexado los nombres la especie correspondiente
+
+```
+
+Se empieza con la creacion de los modelos, se define un vector con datos a eliminar por tener efectos muy fuertes sobre 
+el modelo lineal. Los datos eliminados aplican para los 2 modelos.
+
+
+```{r}
+to_eliminate <- c(62)
+
+MP2.5 <- lm(log(Material_2.5) ~ log(Area) + Tipo_Hoja, data=dataDiametros)#[-to_eliminate,]
+anova(MP2.5)
+bptest(MP2.5)
+gvlma(MP2.5)
+shapiro.test(MP2.5$residuals)
+summary(MP2.5)
+
+# if bptest not enough
+reg <-cochrane.orcutt(MP2.5)
+summary(reg)
+bptest(reg)
+bptest(reg)
+shapiro.test(reg$residuals)
+
+```
+
+```{r}
+boxplot( Material_2.5 ~ Tipo_Hoja, data=dataDiametros )
+
+```
+
+	
+
+```{r}
+plot(Material_2.5 ~ Area, data=dataDiametros)
+mod2.5A<-lm(log(Material_2.5) ~ log(Area), data=dataDiametros)
+summary(mod2.5A)
+
+```
+
+```{r}
+library(dplyr)
+
+z<-dataDiametros%>%count(Nombre.común)
+list<-filter(z,n >= 4)
+val<-list$Nombre.común
+minimos<- dataDiametros %>%filter(Nombre.común %in% val)
+
+```
+
+
+
+```{r}
+m25_boxcos_est <- boxcox(Material_2.5 ~ Area + Nombre.común,data = minimos)
+lambda_m25 <- m25_boxcos_est$x[which.max(m25_boxcos_est$y)]
+boxcos_model_m25 <- lm(((Material_2.5^lambda_m25-1)/lambda_m25) ~ Area + Nombre.común,data = minimos)
+summary(boxcos_model_m25)
+plot(boxcos_model_m25)
+
+```
+
+```{r}
+m10_boxcos_est <- boxcox(Material_10 ~ Area + Nombre.común,data = minimos)
+lambda_m10 <- m10_boxcos_est$x[which.max(m10_boxcos_est$y)]
+boxcos_model_m10 <- lm(log(Material_10) ~ Area + Nombre.común,data = minimos)
+summary(boxcos_model_m10)
+plot(boxcos_model_m10)
+
+```
+	
+
+```{r}
+plot(log(Material_10) ~ log(Area), data=dataDiametros)
+mod10A<-lm(log(Material_10) ~ log(Area), data=dataDiametros)
+plot(mod10A)
+
+``` 
+
+
+
+```{r}
+modelo_10 <- lm(log(Material_10) ~ log(Area) + Tipo_Hoja,data=dataDiametros[-c(62),])#[-c(32,61,62,168,242),])
+
+summary(modelo_10)
+nonparmod10 <- aov(log(Material_10) ~ log(Area) + factor(Tipo_Hoja),data=dataDiametros[-c(62),])
+summary(nonparmod10)
+anova(modelo_10)
+gvlma(modelo_10)
+shapiro.test(nonparmod10$residuals)
+plot(modelo_10)
+#gvlma(modelo_10)
+shapiro.test(modelo_10$residuals)
+bptest(modelo_10)
+dataDiametros <- dataDiametros[!is.na(dataDiametros$Area),]
+#Tests no requieren de supuestos
+kruskal.test(log(Material_10) ~  Tipo_Hoja, data=dataDiametros[-c(62),])
+wilcox.test( log(Area), log(Material_10), alternative = "two.sided")
+## tests without log that don't require assumptions
+kruskal.test(Material_10 ~  Tipo_Hoja, data=dataDiametros[-c(62),])
+wilcox.test( Area, Material_10, alternative = "two.sided")
+
+
+#########IF the coeficients are not right and ther is another way this is a try
+# this packages are used to find the best distribution that fits the data(the y distribution? or residuals)
+library(gamlss)
+library(gamlss.dist)
+library(gamlss.add)
+
+
+modelo_10$residuals <- modelo_10$residuals[!is.na(modelo_10$residuals)]
+fit <- fitDist(modelo_10$residuals)
+summary(fit)
+dataDiametros <- dataDiametros[!is.na(dataDiametros$Material_10),]
+fit <- fitDist(dataDiametros$Material_10,try.gamlss = TRUE)
+summary(fit)
+#"skew exponential power type 4    mu.link = "identity", sigma.link = "log", nu.link = "log", tau.link = "log"
+
+dataDiametros <- dataDiametros[!is.na(dataDiametros$Area),]
+plot(log(dataDiametros$Area),log(dataDiametros$Material_10))
+
+
+regglm <- glm(log(Material_10) ~ log(Area) + factor(Tipo_Hoja), data=dataDiametros, family=gaussian)
+summary(regglm)
+
+#compare the coeficcients, they are a little bit different
+regglm$coefficients
+modelo_10$coefficients
+
+```
+```{r}
+# making a dataframe of predicted areas to make a prediction of the entire particulate material
+d<-data.frame(predicted_area[[1]])
+for (j in 1:length(predicted_area)){
+  if (predicted_area[[j]]!='not_area'){
+    d<-rbind(d,predicted_area[[j]])
+  }
+}
+#Se borra la primera fila que estaria duplicada
+d <- d[-c(1),]
+```
+
+Area error
+
+```{r}
+
+# dtaa frame for the coeffiecientsand thir standard error
+add<-coefficientsArea[[1]][1,]
+add$'Nombre.común'<-rownames(dataAreasclean)[1]
+add$'tipo'<-'intercepto'
+coeffarea<-data.frame(add)
+add2<-coefficientsArea[[1]][2,]
+add2$'Nombre.común'<-rownames(dataAreasclean)[1]
+add2$'tipo'<-'pendiente'
+add2<-data.frame(add2)
+coeffarea<-rbind(coeffarea,add2)
+for (j in 2:length(coefficientsArea)){
+    add<-coefficientsArea[[j]][1,]
+    add$'Nombre.común'<-rownames(dataAreasclean)[j]
+    add$'tipo'<-'intercepto'
+    add<-data.frame(add)
+    coeffarea<-rbind(coeffarea,add)
+    add2<-coefficientsArea[[j]][2,]
+    add2$'Nombre.común'<-rownames(dataAreasclean)[j]
+    add2$'tipo'<-'pendiente'
+    add2<-data.frame(add2)
+    coeffarea<-rbind(coeffarea,add2)
+}
+coeffarea 
+```
+
+```{r}
+###Unite the models of Are and particulate material
+
+#SQL practice
+#ans = unique(dataDiametros[,c('Nombre.común','Tipo_Hoja')])
+# sample dataframe tha is the input
+#samples<- data.frame('Nombre.común'=c('Abarco','Aguacatillo'),'Area'=c(123,324))
+#mergedAreas<-merge(x = samples, y =ans , by="Nombre.común")
+
+
+d$MP10_tot<-predict(modelo_10, newdata = d)
+d$MP10_tot<-exp(d$MP10_tot)
+d$MP2.5_tot<-predict(MP2.5 , newdata = d)
+d$MP2.5_tot<-exp(d$MP2.5_tot)
+d
+
+cat('El total de material capturado por 220 árboles de PM2.5 y PM10 es: ',sum(d$MP2.5_tot,na.rm=TRUE),' g y ',sum(d$MP10_tot,na.rm=TRUE),' g')
+#verification
+intercepto <- summary(modelo_10)$coefficients[1,1]
+pendiente <- summary(modelo_10)$coefficients[2,1]
+HojaSimplefac <- summary(modelo_10)$coefficients[9,1]
+cat('     verificación: ',c(d$MP10_tot[1],(log(d$Area[1])*pendiente+intercepto+HojaSimplefac)))
+
+```
+
+Prediccion final de material capturado por individuo:
+
+Prediccion de MP 2.5
+
+```{r}
+##Graphs about the individuals that capture the most PM
+aux <- aggregate(MP2.5_tot ~ Nombre.común, d, median, na.action=na.omit)
+Namesmax10 <- head(aux[order(-aux$MP2.5_tot),],9)
+data25pred_plot <- d[Nombre.común %in% Namesmax10$Nombre.común, ]
+
+box_plot_25pred <-ggplot(data25pred_plot ,aes(x = reorder(Nombre.común,MP2.5_tot,na.rm=TRUE), y=MP2.5_tot,fill=Nombre.común))+ 
+    geom_boxplot() +
+    theme(panel.background = element_rect(fill = "transparent"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          plot.background = element_rect(fill = "transparent", color = NA),
+          legend.position = "none",
+          plot.title = element_text(family = "Helvetica", face = "bold", size = (17), hjust = 0.5),
+          axis.title.x = element_text(size = 15, family = "Helvetica", face = "bold",colour="black"),
+          axis.title.y = element_text(size = 15, family = "Helvetica", face = "bold",colour="black"),
+          axis.text.x = element_text(size = 11, angle = 45, vjust = 0.5, family = "Helvetica", face="bold",colour="black"))+
+    xlab("Nombre común del árbol") +
+    ggtitle('9 especies de árbol en EAFIT que más MP 2.5 capturan') +
+    ylab("MP2.5 total estimado medio por sp") 
+box_plot_25pred
+
+```
+
+Prediccion de MP 10
+
+```{r}
+##Graphs about the individuals that capture the most PM
+aux <- aggregate(MP10_tot ~ Nombre.común, d, median, na.action=na.omit)
+Namesmax10 <- head(aux[order(-aux$MP10_tot),],9)
+data10pred_plot <- d[Nombre.común %in% Namesmax10$Nombre.común, ]
+
+box_plot_10pred <-ggplot(data10pred_plot ,aes(x = reorder(Nombre.común,MP10_tot,na.rm=TRUE), y=MP10_tot,fill=Nombre.común))+ 
+    geom_boxplot() +
+    theme(panel.background = element_rect(fill = "transparent"),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          plot.background = element_rect(fill = "transparent", color = NA),
+          legend.position = "none",
+          plot.title = element_text(family = "Helvetica", face = "bold", size = (17), hjust = 0.5),
+          axis.title.x = element_text(size = 15, family = "Helvetica", face = "bold",colour="black"),
+          axis.title.y = element_text(size = 15, family = "Helvetica", face = "bold",colour="black"),
+          axis.text.x = element_text(size = 11, angle = 45, vjust = 0.5, family = "Helvetica", face="bold",colour="black"))+
+    xlab("Nombre común del árbol") +
+    ggtitle('9 especies de árbol en EAFIT que más MP 10 capturan') +
+    ylab("MP10 total estimado medio por sp") 
+box_plot_10pred
+
+```
+
+
+
+```{r}
+#Error analysis of the total estimation
+
+### the next lines are to create a data base of the coefficients of tipo de Hoja and its standard error
+HojaMP10 <- tail(summary(modelo_10)$coefficients, n = 9)
+HojaMP10 <- data.frame(HojaMP10)
+Tipo_Hoja <- c()
+for(i in  3:length(rownames(summary(modelo_10)$coefficients))){
+  Tipo_Hoja<-c(Tipo_Hoja,strsplit(rownames(summary(modelo_10)$coefficients)[i],'Tipo_Hoja')[[1]][2])
+}
+Tipo_Hoja
+HojaMP10$Tipo_Hoja<-Tipo_Hoja
+rownames(HojaMP10)<-c()
+HojaMP10
+
+# missing the 2.5 coefficients
+HojaMP2.5<-tail(summary(MP2.5)$coefficients, n = 9)
+HojaMP2.5 <- data.frame(HojaMP2.5)
+Tipo_Hoja <- c()
+for(i in  3:length(rownames(summary(MP2.5)$coefficients))){
+  Tipo_Hoja<-c(Tipo_Hoja,strsplit(rownames(summary(MP2.5)$coefficients)[i],'Tipo_Hoja')[[1]][2])
+}
+Tipo_Hoja
+HojaMP2.5$Tipo_Hoja<-Tipo_Hoja
+rownames(HojaMP2.5)<-c()
+HojaMP2.5
+```
+
+# El modelo final queda por tanto de la forma siguiente a la cual se le va a hacer propagación del error
+donde MP está en gramos y el DAP en centimetros queda:
+
+$$MP =[a_e*e^{k_1 DAP+k_2}+b_e]^a+c$$
+donde c es el intercepto del modelo 10 o MP2.5y a la pendiente
+
+```{r}
+#Hoja is the dataframe of the std arror and coefficients of each Tipo_Hoja
+dHoja0<-summary(modelo_10)$coefficients[3,2]# instead of 3 it depends on the type of Hoja
+dHoja <-(dHoja0*exp( summary(modelo_10)$coefficients[3,1]))/0.434
+
+#Dataframe with only what i need
+#coeffarea is the dataframe that has the standard deviation of each specie and its respective coefficient
+coearea<- coeffarea[c(1,2)]
+coearea$tipo<- coeffarea$tipo
+coearea$Nombre.común<- coeffarea$Nombre.común
+#Separate in two dataframes the intercept and the slope
+pendientearea <- subset(coearea, tipo=='pendiente')
+interceparea <-subset(coearea, tipo=='intercepto')
+
+interceptarea<-interceparea[c(1,2)]
+interceptarea$Nombre.común<-interceparea$Nombre.común
+colnames(interceptarea)<-c('b_e','db_e','Nombre.común')
+
+pendientarea<-pendientearea[c(1,2)]
+pendientarea$Nombre.común<-interceparea$Nombre.común
+colnames(pendientarea)<-c('a_e','da_e','Nombre.común')
+
+# lets take only the variableswe need in the other dataframe
+HojasMP10<-HojaMP10[c(1,2)]
+HojasMP10$Tipo_Hoja<-HojaMP10$Tipo_Hoja
+colnames(HojasMP10)<-c('cHojaMP10','dcHojaMP10','Tipo_Hoja')
+
+HojasMP2.5<-HojaMP2.5[c(1,2)]
+HojasMP2.5$Tipo_Hoja<-HojaMP2.5$Tipo_Hoja
+colnames(HojasMP2.5)<-c('cHojaMP2.5','dcHojaMP2.5','Tipo_Hoja')
+
+# Now the merge of all this data.frames
+mergedAreas<-merge(x = d, y =pendientarea , by="Nombre.común")
+mergedAreas<-merge(x = mergedAreas, y =interceptarea , by="Nombre.común")
+mergedAreas<-merge(x = mergedAreas, y =HojasMP2.5 , by="Tipo_Hoja")
+mergedAreas<-merge(x = mergedAreas, y =HojasMP10 , by="Tipo_Hoja")
+
+# Now its time to do opperations with the columns and get a new column with the standard error of the total estimation for each model
+
+#lets start by defining all the deltas
+k_1 <- 0.0643
+k_2 <- 7.6109
+dk_1 <- 0.0081
+dk_2 <- 0.2355 # taken from Nowak, D. J. (1996). Estimating leaf area and leaf biomass of open-grown deciduous urban trees. Forest science, 42(4), 504-507.
+
+aMP10 <- summary(modelo_10)$coefficients[2,1]
+daMP10 <-summary(modelo_10)$coefficients[2,2]
+dbMP10 <- summary(modelo_10)$coefficients[1,2] 
+dcMP10  <-(dbMP10*exp( summary(modelo_10)$coefficients[1,1]))/0.434#db*e^b/0.434
+
+aMP2.5  <-summary(MP2.5)$coefficients[2,1]
+daMP2.5  <-summary(MP2.5)$coefficients[2,2]
+dbMP2.5 <- summary(MP2.5)$coefficients[1,2] 
+dcMP2.5  <-(dbMP2.5*exp( summary(MP2.5)$coefficients[1,1]))/0.434#db*e^b/0.434
+
+##Lets create all the formulas with the values and columns
+times<-c()
+for (j in 1:length(mergedAreas$Diametro)){ 
+  W <- mergedAreas$Diametro[j]
+  if (grepl("/", W, fixed=TRUE)== TRUE){
+   times<-c(times,lengths(gregexpr("/", W)) + 1)
+  }
+  else if (grepl("-", W, fixed=TRUE)==TRUE){
+    times<-c(times,lengths(gregexpr("-", W)) + 1)
+  }
+}# times is how many diameters measured are in one individual
+
+dDAP<-(0.1/pi)*sqrt(times)# This is the error of the meter
+DAP<-((log(mergedAreas$pred_area/mergedAreas$a_e)-k_2))/k_1
+dNsobreN<-(1/0.434)*sqrt((dk_1/k_1)**2+(dk_2)**2+(dDAP/DAP)**2)
+M<-mergedAreas$a_e*exp(k_1*DAP+k_2)
+dM<-sqrt(M**2*((mergedAreas$da_e/mergedAreas$a_e)**2+(dNsobreN)**2))
+dA<-sqrt(mergedAreas$b_e**2 + dM**2)
+
+QMP2.5<-aMP2.5*log(mergedAreas$pred_area)
+dQMP2.5<-QMP2.5**2 *(aMP2.5/daMP2.5+(0.434*dA/(mergedAreas$pred_area*log(mergedAreas$pred_area))))
+
+QMP10<-aMP10*log(mergedAreas$pred_area)
+dQMP10<-QMP10**2 *(aMP10/daMP10+(0.434*dA/(mergedAreas$pred_area*log(mergedAreas$pred_area))))
+
+
+Sigma_MP2.5<-(mergedAreas$MP2.5_tot/0.434)*sqrt(dcMP2.5**2 +dQMP2.5**2+mergedAreas$dcHojaMP2.5**2)
+Sigma_MP10<-(mergedAreas$MP10_tot/0.434)*sqrt(dcMP10**2 +dQMP10**2+mergedAreas$dcHojaMP10**2)
+
+#Now to concatenate the final error to the dtaaframe we have:
+mergedAreas$Sigma_MP2.5 <- Sigma_MP2.5
+mergedAreas$Sigma_MP10 <- Sigma_MP10
+
+cat('    El error de PM10 y pm2.5 respectivamente es:  ',sum(mergedAreas$Sigma_MP10,na.rm=TRUE),'g y ',sum(mergedAreas$Sigma_MP2.5,na.rm=TRUE))
+
+
+
+```

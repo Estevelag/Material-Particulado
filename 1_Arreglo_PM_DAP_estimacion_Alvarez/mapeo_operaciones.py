@@ -74,9 +74,9 @@ def biomasa_individuo(data,data_res,b0,b1,metros=True):
     #Metodo con lambda, se divide sobre cien para pasarlo a metros
     
     if metros == True:
-        data_res1['BiomasaEstimada']=data_res1['Diametro'].apply(lambda x : math.log( b0 + b1 * x/100))
+        data_res1['BiomasaEstimada']=data_res1['Diametro'].apply(lambda x : math.exp( b0 + b1 * x/100*(math.pi)))
     elif metros == False:
-        data_res1['BiomasaEstimada']=data_res1['Diametro'].apply(lambda x : math.log( b0 + b1 * x ))
+        data_res1['BiomasaEstimada']=data_res1['Diametro'].apply(lambda x : math.exp( b0 + b1 * x/(math.pi) ))
     data_res["BiomasaEstimada"]=np.nan
     for i in range(len(data_res.index)):
     
